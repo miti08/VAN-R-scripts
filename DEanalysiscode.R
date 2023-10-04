@@ -13,15 +13,15 @@ library(ggplot2)
 library(limma)
 library(gplots)
 library(AnnotationDbi)
-library(org.Mm.eg.db)
+
 library(Glimma)
 library(RColorBrewer)
 ##loaddata and create DGE list
-data <- read.table("merged_rawcounts.txt",sep=",",header=TRUE) ##input the rawcounts data post-cleaning
+data <- read.table("merged_sumrawcounts.txt",sep=",",header=TRUE) ##input the rawcounts data post-cleaning
 dge <- DGEList(data,group=substr(colnames(data),0,1))
 
 ##Extract sample info
-Counts <- read.table("merged_rawcounts.txt",sep=",",header=TRUE)
+Counts <- read.table("merged_sumrawcounts.txt",sep=",",header=TRUE)
 Counts <- Counts[which(rowSums(Counts) > 0),] #omit the genes without counts
 Counts
 condition <- factor(c("C","C","C","C","C","C","C","C","C","C","T","T","T","T","T","T","T","T","T","T")) #label subjects' condition
@@ -38,8 +38,8 @@ normalized_counts <- normalized_counts[order(rowSums(normalized_counts)),] #sort
 write.csv(normalized_counts, file="Counts_significantresults_reorder.csv")
 
 ##Get variance of dataset
-vsdata <- varianceStabilizingTransformation(dds, blind = TRUE, fitType = "local")
-k<-plotPCA(vsdata, intgroup = "condition")
+vsdata <- varianceStabilizingTransformation(dds, blind = TRUE, fitType = "mean")
+plotPCA(vsdata, intgroup = "condition")
 plotDispEsts(dds,log="xy",legend=TRUE,cex=0.5)
 
 ##Report results from DE analysis
@@ -76,7 +76,7 @@ VP
 VPlot<-EnhancedVolcano(toptable = VP,              # We use the shrunken log2 fold change as noise associated with low count genes is removed 
                 x = "sigs.log2FoldChange",           # Name of the column in resLFC that contains the log2 fold changes
                 y = "sigs.padj",                     # Name of the column in resLFC that contains the p-value
-                lab = rownames(VP),labSize=5,ylim=c(0,60),xlim=c(-30,30))
+                lab = rownames(VP),labSize=5,ylim=c(0,50),xlim=c(-30,30))
 
 ##cut dataframe choosing significant gene counts only
 library(dplyr)
@@ -106,3 +106,19 @@ datacountdown <- countdown %>% select(colnames(countdown),-contains("X"))
 datacountdown <- as.vector.data.frame(datacountdown)
 downpercentile <- quantile(unlist(datacountdown), probs = c(0.2,0.4,0.5,0.6,0.7,0.8,0.9))
 downpercentile
+
+res_lfc <- subset(sigss, abs(log2FoldChange) > 1) 
+topVarGenes <- head(order(rowVars(assay(vsdata), useNames = T), decreasing = T), 50)
+mat  <- assay(vsdata)[ topVarGenes, ]
+mat  <- mat - rowMeans(mat)
+top20DEGs <- order(abs(res_lfc$log2FoldChange), decreasing=TRUE)
+
+
+coldata2<-data.frame(sample=colnames(Counts), condition=c("control","control","control","control","control","control","control","control","control","control","alzheimer","alzheimer","alzheimer","alzheimer","alzheimer","alzheimer","alzheimer","alzheimer","alzheimer","alzheimer"))
+annot_col <- coldata2 %>%
+  column_to_rownames('sample') %>%
+  dplyr::select(condition) %>%
+  as.data.frame()
+
+pheatmap(mat, cluster_rows=TRUE, show_rownames=T,
+         cluster_cols=FALSE, annotation_col=annot_col, fontsize_row=6)
